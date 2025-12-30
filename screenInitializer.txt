@@ -1,0 +1,77 @@
+-- SERVER SCRIPT -- (so the screen renders faster)
+
+local pixelSize = 2
+local tileSize = pixelSize * 8
+local pixelX = 0
+local pixelY = 0
+local tileX = 0
+local tileY = 0
+local charRom = require(game.ReplicatedStorage.charROM)
+local orgTile = {
+	3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,
+}
+local grayScale = {
+	Color3.fromRGB(0, 0, 0), -- Darkest color on tile (index: color 1)
+	Color3.fromRGB(68, 68, 68), -- Darker color on tile (index: color 2)
+	Color3.fromRGB(118, 118, 118), -- Lightest color on tile (index: color 3)
+	Color3.fromRGB(255, 255, 255) -- background color, will be used by background color only
+}
+function createTilePx () -- creates 1 tile to be cloned later (for efficiency)
+	local pxIndex = 0
+	local tilePxMain = Instance.new("Frame")
+	tilePxMain.Transparency = 1
+	tilePxMain.Position = UDim2.new(0,0,0,0)
+	for x=1,8 do
+		for y=1,8 do
+			local pixel = Instance.new("Frame")
+			pixel.BackgroundColor3 = grayScale[orgTile[pxIndex + 1] + 1]
+			pixel.Size = UDim2.new(0,pixelSize,0,pixelSize)
+			pixel.BorderSizePixel = 0
+			pixel.Position = UDim2.new(0,pixelX * pixelSize, 0, pixelY * pixelSize)
+			pixel.Parent = tilePxMain
+			pixel.Name = pxIndex
+			pixelX += 1
+			pxIndex += 1
+		end
+		pixelY += 1
+		pixelX = 0
+	end
+	tilePxMain:SetAttribute("ramTileIndx",2)
+	return tilePxMain
+end
+function colorPalletilize ()
+
+end
+game.ReplicatedStorage.renderScreenSend.OnServerEvent:Connect(function(plr)
+	local tile = createTilePx()
+	local tileIndex = 0
+	local screenFolder = Instance.new("Folder")
+	for y=1,29 do
+		for x=1, 31 do
+			local newTileClone = tile:Clone()
+			local tileXPos = tileX * tileSize
+			local tileYPos = tileY * tileSize
+			newTileClone.Position = UDim2.new(0,tileXPos + 30,0,tileYPos + 10)
+			newTileClone.Parent = screenFolder
+			newTileClone.Name = "tile" .. tostring(tileIndex)
+			newTileClone:SetAttribute("pallet",0)
+			local newScr = script.palletUpd:Clone()
+			newScr.Parent = newTileClone
+			tileX += 1
+			tileIndex += 1
+			task.wait()
+		end
+		tileY += 1
+		tileX = 0
+		task.wait()
+	end
+	screenFolder.Name = plr.Name or "unknown"
+	screenFolder.Parent = game.ReplicatedStorage.renderedPictures
+end)

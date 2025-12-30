@@ -1,0 +1,227 @@
+-- LOCAL SCRIPT --
+
+-- SERVICES --
+local uIS = game:GetService("UserInputService")
+local repStore = game.ReplicatedStorage
+local players = game.Players
+-- MODULES --
+local RAM = require(repStore:WaitForChild("RAM"))
+local charROM = require(repStore:WaitForChild("charROM"))
+local codeROM = require(repStore:WaitForChild("codeROM"))
+local colors = require(repStore:WaitForChild("nesColors"))
+local popups = require(repStore:WaitForChild("popups"))
+-- EVENTS --
+
+-- RAND VAR -
+local popUpOptSelected = repStore.selectionSelected
+--- tile drawing ---
+local allClrs = colors.getAllColors()
+local plr = players.LocalPlayer
+local selClr = 3
+local pxSize = 40
+local pxX = 0
+local pxY = 0
+local buttons = script.Parent.Parent.buttonsOverlay
+
+local tileDrawArea = script.Parent.tileDrawArea
+local palletFrame = script.Parent.palletMaker
+
+local grayScaleIndex = {
+	Color3.fromRGB(0, 0, 0),       -- 1
+	Color3.fromRGB(68, 68, 68),    -- 2
+	Color3.fromRGB(118, 118, 118), -- 3
+	Color3.fromRGB(255, 255, 255)  -- 4 (background)
+}
+local pxIndex = 0
+for i=1,8 do
+	for ii=1,8 do
+		pxIndex += 1
+		local pixelBtn = Instance.new("TextButton",tileDrawArea.tileStart)
+		pixelBtn.Text = ""
+		pixelBtn.Position = UDim2.new(0,pxX * pxSize,0,pxY * pxSize)
+		pixelBtn.Size = UDim2.new(0,pxSize,0,pxSize)
+		pixelBtn.BorderSizePixel = 0
+		pixelBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
+		pixelBtn.Name = tostring(pxIndex)
+		pxX += 1
+		pixelBtn:SetAttribute("palletIndx",3)
+		pixelBtn.MouseButton1Click:Connect(function()
+			script.paint:Play()
+			pixelBtn:SetAttribute("palletIndx",selClr)
+			pixelBtn.BackgroundColor3 = grayScaleIndex[selClr+1] -- finds right color on list
+		end)
+	end
+	pxX = 0
+	pxY += 1
+end
+pxIndex = 0
+for i,v in pairs(grayScaleIndex) do
+	local pallOpt = script.palletOption:Clone()
+	pallOpt.main.clrBtn.BackgroundColor3 = v
+	pallOpt.main.palletClrLabel.Text = pallOpt.main.palletClrLabel.Text .. tostring(i - 1)
+	pallOpt.main.clrBtn.MouseButton1Click:Connect(function()
+		selClr = i - 1
+	end)
+	pallOpt.Parent = script.Parent.tileDrawArea.clrOptions
+end
+tileDrawArea.addTileBtn.MouseButton1Click:Connect(function()
+	local newTileData = {}
+	local tileSrtr = script.Parent.tileDrawArea.tileStart
+	for i=1,64 do
+		local v = tileSrtr:FindFirstChild(tostring(i))
+		if v:IsA("TextButton") then
+			if v:GetAttribute("palletIndx") then
+				table.insert(newTileData,v:GetAttribute("palletIndx"))
+			end
+		end
+	end
+	if #newTileData == 64 then
+		charROM.addTileData(newTileData)
+	else
+		warn("Failed to pack data into charROM!",newTileData)
+	end
+end)
+--- pallet lists ---
+local palletList = script.Parent.palletMaker.palletFrame
+local loadedPallets = {}
+local palletOptions = script.Parent.palletMaker.colors
+function loadPalletToEditor (indx)
+	palletOptions.pallet1.BackgroundColor3 = indx[1]
+	palletOptions.pallet2.BackgroundColor3 = indx[2]
+	palletOptions.pallet3.BackgroundColor3 = indx[3]
+end
+function loadEnabledPallets() -- loads pallets from RAM
+	for i,v in ipairs(loadedPallets) do
+		v:Destroy()
+	end
+	local RamPallet = RAM.getAllPallets()
+	RamPallet = RamPallet
+	print(RamPallet)
+	for i,v in pairs(RamPallet) do -- v is the pallet list
+		local pallMain = script.palletMain:Clone()
+		local pallInfo = pallMain.bg
+		pallMain:SetAttribute("palletIndx",i)
+		pallMain.Name = "pallet" .. tostring(i)
+		pallMain.bg.label.Text = "Pallet " .. tostring(i)
+		for ii,vv in ipairs(v) do
+			pallInfo.clr:FindFirstChild(tostring(ii)).BackgroundColor3 = vv
+		end
+		pallMain.Parent = palletList
+		table.insert(loadedPallets,pallMain)
+		pallInfo.deletePallet.MouseButton1Click:Connect(function()
+			RAM.RemovePalletAtIndx(i)
+			loadEnabledPallets()
+		end)
+		pallInfo.edit.MouseButton1Click:Connect(function()
+			loadPalletToEditor(v)
+		end)
+	end
+end
+--- pallet editor ---
+local currColor = 48
+
+local palletOpt = palletFrame.palletOpt
+local allPallets = colors.getAllColors()
+local codeExplanationUi = script.Parent.codeFrame.codeExplanation
+local clrBtnSize = 25
+local clrX = 0
+local clrY = 0
+local maxPerRow = 16
+for i,v in pairs(allPallets) do
+	clrX += 1
+	local newBtn = Instance.new("TextButton")
+	newBtn.Text = ""
+	newBtn.BackgroundColor3 = v
+	newBtn.Position = UDim2.new(0,clrX * clrBtnSize,0,clrY * clrBtnSize)
+	newBtn.Size = UDim2.new(0,clrBtnSize,0,clrBtnSize)
+	newBtn.BorderSizePixel = 0
+	newBtn.Name = tostring(i)
+	newBtn.MouseButton1Click:Connect(function()
+		local lastClr = palletOpt:FindFirstChild(currColor)
+		lastClr.BorderSizePixel = 0
+		local colorOptFound = palletOpt:FindFirstChild(i)
+		colorOptFound.BorderSizePixel = 2
+		currColor = i
+		newBtn:SetAttribute("colorIndx",currColor)
+	end)
+	newBtn.Parent = palletOpt
+	if clrX == maxPerRow then
+		clrY += 1
+		clrX = 0
+	end
+end
+for i,v in palletFrame.colors:GetChildren() do
+	if v:IsA("TextButton") then
+		v.MouseButton1Click:Connect(function()
+			v.BackgroundColor3 = allPallets[currColor]
+		end)
+	end
+end
+local failsafePallet = {
+	Color3.new(0, 0, 0),
+	Color3.new(0.313725, 0.313725, 0.313725),
+	Color3.new(0.647059, 0.647059, 0.647059),
+}
+palletFrame.addPalletBtn.MouseButton1Click:Connect(function()
+	local newPallet = {}
+	for i,v in palletFrame.colors:GetChildren() do
+		if v:IsA("TextButton") then
+			table.insert(newPallet,v.BackgroundColor3)
+		end
+	end
+	if #newPallet ~= 3 then
+		newPallet = failsafePallet
+	end
+	RAM.setPallet(newPallet)
+	RAM.setBgColor(50)
+	loadEnabledPallets()
+end)
+--- screen editor ---
+
+
+--- music editor ---
+
+--- sfx editor ---
+
+--- code editor ---
+local varEntryFrame = script.codeLine
+local scriptViwer = script.Parent.codeFrame.scriptViwer
+local addBtn = script.addBtn
+local codeLine = script.codeLine
+addBtn.Parent = scriptViwer
+addBtn.Name = "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999" -- SUPPOSED to make it the last frame on the list
+addBtn:SetAttribute("addButton",true)
+local buttonSelected = false
+addBtn.TextButton.MouseButton1Click:Connect(function() -- adds a script line to the code
+	addBtn.Parent = script.codeLine
+	local newFrame = varEntryFrame:Clone()
+	newFrame.Parent = scriptViwer
+	addBtn.Parent = scriptViwer
+	newFrame.instruction.mainBtn.MouseButton1Click:Connect(function()
+		newFrame:SetAttribute("Selected",true)
+		popups.placeSelectionTabAtCursor(codeROM.fetchCodeList(),"codePopup",nil,nil,plr,codeROM.fetchCodeExplanationList(),script.Parent.codeFrame.codeExplanation)                                                                                                                     
+	end)
+	popUpOptSelected.Event:Connect(function(selection)
+		if newFrame:GetAttribute("Selected") == true then
+			newFrame:SetAttribute("Selected",nil)
+			newFrame.instruction.mainBtn.Text = selection
+		end
+	end)
+end)
+--- Buttons ---
+buttons.tileDrawToggle.MouseButton1Click:Connect(function() -- shows the tile draw UI when toggled
+	tileDrawArea.Visible = true
+	palletFrame.Visible = false
+	script.Parent.Parent.mainScreen.Enabled = false
+end)
+buttons.palletEditorToggle.MouseButton1Click:Connect(function() -- shows the pallet editor UI when toggled
+	loadEnabledPallets()
+	tileDrawArea.Visible = false
+	palletFrame.Visible = true
+	script.Parent.Parent.mainScreen.Enabled = false
+end)
+buttons.screenBtn.MouseButton1Click:Connect(function() -- shows the NES screen when tooggled
+	tileDrawArea.Visible = false
+	palletFrame.Visible = false
+	script.Parent.Parent.mainScreen.Enabled = true
+end)
